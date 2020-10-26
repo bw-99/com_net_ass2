@@ -38,27 +38,37 @@ def handle_req(clientsocket):
         pass
     else:
         index = find_file(destination)
-        cookie_value = cookie[' login']
-        refresh = cookie['Refresh']
-        cookie_start_time = cookie['start_time']
-        cookie_referer = cookie['Referer']
-        cookie_id = cookie['id']
-        cookie_pw = cookie['pw']
-        if (id != -1):
-            cookie_id = id
-            cookie['id'] = id
-        if (pw != -1):
-            cookie_pw = pw
-            cookie['pw'] = pw
+        cookie_value, cookie_refresh,\
+        cookie_start_time, cookie_referer,\
+        cookie_id,cookie_pw = get_cookie_from_dic(cookie)
+        cookie_id=find_real_idorpw(id,cookie,cookie_id,'id')
+        cookie_pw=find_real_idorpw(pw,cookie,cookie_pw,'pw')
 
         if (cookie_value == '0' or cookie_value == "None"):
-            send_before_login(index, clientsocket, refresh, cookie_value, cookie_referer, cookie_id, cookie_pw)
+            send_before_login(index, clientsocket, cookie_refresh,
+                              cookie_value,cookie_referer, cookie_id, cookie_pw)
         else:
             send_after_login(index, clientsocket, cookie_start_time, cookie_value, cookie_id)
     clientsocket.shutdown(SHUT_WR)
 
+def get_cookie_from_dic(cookie):
+    cookie_value = cookie[' login']
+    cookie_refresh = cookie['Refresh']
+    cookie_start_time = cookie['start_time']
+    cookie_referer = cookie['Referer']
+    cookie_id=cookie['id']
+    cookie_pw=cookie['pw']
+    return cookie_value,cookie_refresh,cookie_start_time,cookie_referer,cookie_id,cookie_pw
+
+def find_real_idorpw(val,cookie,cookie_val,index):
+    if (val != -1):
+        cookie['{}'.format(index)] = val
+    else:
+        val=cookie_val
+    return val
+
+
 def send_before_login(index,clientsocket,refresh, login,cookie_referer,id,pw):
-    print("send before")
     if (index == ""):
         index = "index.html"
         data_format = find_format(index)
@@ -68,13 +78,7 @@ def send_before_login(index,clientsocket,refresh, login,cookie_referer,id,pw):
         data += "Set-Cookie: start_time={};max-age=30\r\n".format(-1)
         data += "\r\n"
         clientsocket.send(data.encode())
-        with open(index, "rb") as k:
-            html = k.read(10000)
-            while (html):
-                data = html
-                clientsocket.send(data)
-                html = k.read(10000)
-        k.close()
+        send_data(index,clientsocket)
     elif( index == "index.html"):
         send_403(clientsocket)
     elif(index=="secret.html" and refresh=="False" and cookie_referer=="True"):
@@ -87,18 +91,20 @@ def send_before_login(index,clientsocket,refresh, login,cookie_referer,id,pw):
         data += "Set-Cookie: start_time={};max-age=30\r\n".format(time())
         data += "\r\n"
         clientsocket.send(data.encode())
-        with open(index, "rb") as k:
-            html = k.read(10000)
-            while (html):
-                data = html
-                clientsocket.send(data)
-                html = k.read(10000)
-        k.close()
+        send_data(index,clientsocket)
     else:
         send_403(clientsocket)
 
+def send_data(index,clientsocket):
+    with open(index, "rb") as k:
+        html = k.read(100000)
+        while (html):
+            data = html
+            clientsocket.send(data)
+            html = k.read(100000)
+    k.close()
+
 def send_after_login(index,clientsocket,start_time,login, cookie_id):
-    print("send after")
     if(index==-1):
         send_404(clientsocket)
     else:
@@ -119,13 +125,7 @@ def send_after_login(index,clientsocket,start_time,login, cookie_id):
             k.close()
         else:
             send_200(clientsocket,data_format)
-            with open(index, "rb") as k:
-                html = k.read(10000)
-                while (html):
-                    data = html
-                    clientsocket.send(data)
-                    html = k.read(10000)
-            k.close()
+            send_data(index,clientsocket)
 
 def send_200(clientsocket,data_format):
     data = "HTTP/1.1 200 OK\r\n"
@@ -166,7 +166,8 @@ def find_cookie_item(word):
         elif 'pw' in word[k]:
             pw_name,pw_value=parsing(word[k])
 
-    return login_name,login_value,time_name,time_value,id_name,id_value,pw_name,pw_value
+    return login_name,login_value,time_name,\
+           time_value,id_name,id_value,pw_name,pw_value
 
 def parse_pieces(pieces):
     tag=0
@@ -216,7 +217,6 @@ def find_format(index):
     else:
         data_format = "text"
     return data_format
-
 
 
 print('Access ',SERVER)
